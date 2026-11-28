@@ -79,83 +79,92 @@ export default function Home({ onNavigate }: HomeProps) {
   // 2. Statistics Counter State & Animation
   // -----------------------------------------------------------------
   const statsSection = useMemo(
-    () => getSection(metadata, "statistics", "stats", "stats_section"),
-    [metadata]
+  () => getSection(metadata, "statistics", "stats", "stats_section"),
+  [metadata]
+);
+
+const statsCardField = useMemo(
+  () => getField(statsSection, "items"),
+  [statsSection]
+);
+
+const statsCardData = useMemo(
+  () => getCardJsonData<Record<string, string>>(statsCardField),
+  [statsCardField]
+);
+
+const statsData = useMemo(() => {
+  if (statsCardData && statsCardData.length > 0) {
+    return statsCardData.map((item) => {
+      const number = item.number || "0";
+      const target = parseInt(number.replace(/\D/g, ""), 10) || 0;
+      const suffix = item.suffix || "+";
+      const label = item.label || "Items";
+
+      return {
+        target,
+        suffix,
+        label,
+      };
+    });
+  }
+
+  return [
+    { target: 300, suffix: "+", label: "Designs" },
+    { target: 500, suffix: "+", label: "Dealers" },
+    { target: 12, suffix: "+", label: "Collections" },
+    { target: 10, suffix: "k+", label: "Sq ft warehouse" },
+  ];
+}, [statsCardData]);
+
+const [statsInView, setStatsInView] = useState(false);
+const statsRef = useRef<HTMLDivElement>(null);
+const [counts, setCounts] = useState(statsData.map(() => 0));
+
+useEffect(() => {
+  setCounts(statsData.map(() => 0));
+}, [statsData]);
+
+useEffect(() => {
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      if (entry.isIntersecting) {
+        setStatsInView(true);
+        observer.disconnect();
+      }
+    },
+    { threshold: 0.3 }
   );
-  const statsCardField = useMemo(
-    () => getField(statsSection, "stats", "statistics", "statistic_list", "stat_items"),
-    [statsSection]
-  );
-  const statsCardData = useMemo(
-    () => getCardJsonData<Record<string, string>>(statsCardField),
-    [statsCardField]
-  );
 
-  const statsData = useMemo(() => {
-    if (statsCardData && statsCardData.length > 0) {
-      return statsCardData.map((item) => {
-        const rawVal = item.value || item.count || item.number || "100+";
-        const match = rawVal.match(/(\d+)/);
-        const target = match ? parseInt(match[0], 10) : 100;
-        const suffix = rawVal.replace(String(target), "") || "+";
-        const label = item.label || item.title || item.name || "Items";
-        return { target, suffix, label };
-      });
-    }
-    return [
-      { target: 300, suffix: "+", label: "Designs" },
-      { target: 500, suffix: "+", label: "Dealers" },
-      { target: 12, suffix: "+", label: "Collections" },
-      { target: 10, suffix: "k+", label: "Sq ft warehouse" },
-    ];
-  }, [statsCardData]);
+  if (statsRef.current) {
+    observer.observe(statsRef.current);
+  }
 
-  const [statsInView, setStatsInView] = useState(false);
-  const statsRef = useRef<HTMLDivElement>(null);
-  const [counts, setCounts] = useState(statsData.map(() => 0));
+  return () => observer.disconnect();
+}, []);
 
-  useEffect(() => {
-    setCounts(statsData.map(() => 0));
-  }, [statsData]);
+useEffect(() => {
+  if (!statsInView) return;
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setStatsInView(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.3 }
+  const duration = 1600;
+  const startTime = performance.now();
+
+  const animate = (time: number) => {
+    const elapsed = time - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 4);
+
+    setCounts(
+      statsData.map((stat) => Math.round(stat.target * ease))
     );
 
-    if (statsRef.current) {
-      observer.observe(statsRef.current);
+    if (progress < 1) {
+      requestAnimationFrame(animate);
     }
+  };
 
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!statsInView) return;
-
-    const duration = 1600;
-    const startTime = performance.now();
-
-    const animate = (time: number) => {
-      const elapsed = time - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 4);
-
-      setCounts(statsData.map((s) => Math.round(s.target * ease)));
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }, [statsInView, statsData]);
+  requestAnimationFrame(animate);
+}, [statsInView, statsData]);
 
   // -----------------------------------------------------------------
   // 3. Video Modal State
@@ -210,16 +219,8 @@ export default function Home({ onNavigate }: HomeProps) {
     getFieldValue(heroSection, "hero_description", "description", "subtitle", "lede") ||
     "A grandeur of collection is ready to be explored with unmatched innovation for your premium residence and commercial spaces.";
 
-  const heroBtn1 = parseButtonValue(
-    getFieldValue(heroSection, "button_1", "explore_button", "cta_1"),
-    "Explore collections",
-    "#collections"
-  );
-  const heroBtn2 = parseButtonValue(
-    getFieldValue(heroSection, "button_2", "catalogue_button", "cta_2"),
-    "Download catalogue",
-    "catalog"
-  );
+  const heroBtn1 = {text:getFieldValue(heroSection,"primary_button_text") || "Explore collections",link: "#collections",};
+const heroBtn2 = {text:getFieldValue( heroSection,"secondary_button_text") || "Download catalogue",link: "catalog",};
 
   const heroImages = useMemo(() => {
     const img1 = getFieldValue(heroSection, "image_1", "hero_image_1", "image") || "/img/interior.jpg";
@@ -228,19 +229,17 @@ export default function Home({ onNavigate }: HomeProps) {
     return [img1, img2, img3];
   }, [heroSection]);
 
-  const heroBadgesField = getField(heroSection, "badges", "hero_badges", "features");
-  const heroBadgesData = getCardJsonData<Record<string, string>>(heroBadgesField);
-  const heroBadges = useMemo(() => {
-    if (heroBadgesData && heroBadgesData.length > 0) {
-      return heroBadgesData.map((b) => b.title || b.label || b.name || "");
-    }
-    return [
-      "Excellent Designs",
-      "Reliable Quality",
-      "Supportive Team",
-      "Pan India Presence",
-    ];
-  }, [heroBadgesData]);
+  const heroBadgesField = getField(heroSection, "badges");
+const heroBadgesData = getCardJsonData<Record<string, string>>(heroBadgesField);
+
+const heroBadges = useMemo(() => {if (heroBadgesData && heroBadgesData.length > 0) {return heroBadgesData.map((item) => item.text || "").filter(Boolean);}
+  return [
+    "Excellent Designs",
+    "Reliable Quality",
+    "Supportive Team",
+    "Pan India Presence",
+  ];
+}, [heroBadgesData]);
 
   // -----------------------------------------------------------------
   // 5. About Section Data (Metadata + Fallbacks)
@@ -262,10 +261,56 @@ export default function Home({ onNavigate }: HomeProps) {
     getFieldValue(aboutSection, "description_2", "paragraph_2") ||
     "Our purpose is simple: to make high-quality, affordable materials accessible to every Indian.";
   const aboutBtn = parseButtonValue(
-    getFieldValue(aboutSection, "button", "cta_button"),
+    getFieldValue(aboutSection, "about_button_text", "button", "cta_button"),
     "About Premier",
     "about"
   );
+
+  const aboutCatalogueButtonText =
+    getFieldValue(aboutSection, "catalogue_button_text", "catalogue_button") ||
+    "View catalogue";
+
+  const aboutCardsField = getField(aboutSection, "cards", "items", "about_cards");
+  const aboutCardsData = getCardJsonData<Record<string, string>>(aboutCardsField);
+
+  const defaultAboutCards = useMemo(
+    () => [
+      {
+        image: "/img/craft.jpg",
+        alt: "Craftsman holding a Premier board",
+        title: "Strong",
+        description:
+          "Built for the demands of everyday use, with strength in the material and in the brand.",
+      },
+      {
+        image: "/img/swatches.jpg",
+        alt: "Premier laminate samples in marble, speckled and wood finishes",
+        title: "Designer",
+        description: "Laminates and finishes that elevate every space.",
+      },
+      {
+        image: "/img/team.jpg",
+        alt: "Premier team member in uniform",
+        title: "Reliable",
+        description:
+          "Consistently high-quality products, and every commitment honoured.",
+      },
+    ],
+    []
+  );
+
+  const aboutCards = useMemo(() => {
+    if (aboutCardsData && aboutCardsData.length > 0) {
+      return aboutCardsData.map((item, index) => ({
+        image: item.image || "/img/craft.jpg",
+        alt: item.alt || `Premier ${item.title || `feature ${index + 1}`}`,
+        title: item.title || item.name || `Feature ${index + 1}`,
+        description: item.description || item.desc || "",
+      }));
+    }
+
+    return defaultAboutCards;
+  }, [aboutCardsData, defaultAboutCards]);
 
   // -----------------------------------------------------------------
   // 6. Collections (Exquisite Collection sequence) - Dynamic Count
@@ -323,26 +368,103 @@ export default function Home({ onNavigate }: HomeProps) {
   const latestHeading =
     getFieldValue(latestSection, "heading", "title") || "Latest collections";
   const latestSubtitle =
-    getFieldValue(latestSection, "subtitle", "description") ||
+    getFieldValue(latestSection, "description", "subtitle") ||
     "Two fresh arrivals from Premier. Watch them in real spaces, then open the full collection.";
-  const versaceVideo = getFieldValue(latestSection, "versace_video", "video_1") || "";
-  const imazicaVideo = getFieldValue(latestSection, "imazica_video", "video_2") || "";
+
+  const latestItemsField = getField(
+    latestSection,
+    "items",
+    "collections",
+    "collection_list",
+    "cards"
+  );
+  const latestItemsData = getCardJsonData<Record<string, string>>(latestItemsField);
+
+  const defaultLatestItems = useMemo(
+    () => [
+      {
+        id: "versace-6h",
+        eyebrow: "New collection",
+        name: "Versace 6H",
+        subtitle: "6H scratch grade",
+        description:
+          "100% pure virgin acrylic, 1.5 mm thick, with a 6H scratch grade.",
+        image: "/img/v6h-lobby.jpg",
+        video: "",
+        videoLabel: "Watch the film",
+        features: [
+          "100% pure virgin acrylic",
+          "1.5 mm thick",
+          "6H scratch grade",
+        ],
+        collectionButtonText: "See Versace 6H",
+        catalogueButtonText: "View catalogue",
+        collectionId: "versace-6h",
+      },
+      {
+        id: "imazica",
+        eyebrow: "New collection",
+        name: "Imazica",
+        subtitle: "Beautiful walls. Long-lasting smiles.",
+        description:
+          "India’s first designer acrylic laminate made for kids’ spaces. A premium, long-lasting wall solution that goes beyond wallpaper.",
+        image: "/img/imz-playroom.jpg",
+        video: "",
+        videoLabel: "Watch the film",
+        features: [
+          "High-gloss acrylic finish",
+          "Hundreds of exciting themes",
+          "4 ft × 8 ft panels",
+        ],
+        collectionButtonText: "See Imazica",
+        catalogueButtonText: "View catalogue",
+        collectionId: "imazica",
+      },
+    ],
+    []
+  );
+
+  const cataloguePaths: Record<string, string> = {
+    "versace-6h": "/catalogue/premier-versace-6h-catalogue.pdf",
+    imazica: "/catalogue/premier-imazica-catalogue.pdf",
+  };
+
+  const latestItems = useMemo(() => {
+    if (latestItemsData && latestItemsData.length > 0) {
+      return latestItemsData.map((item, index) => ({
+        id: item.id || item.slug || `latest-${index}`,
+        eyebrow: item.eyebrow || "New collection",
+        name: item.name || item.title || `Collection ${index + 1}`,
+        subtitle: item.subtitle || "",
+        description: item.description || item.desc || "",
+        image: item.image || "",
+        video: item.video || "",
+        videoLabel: item.video_label || item.videoLabel || "Watch the film",
+        features: (item.features || item.feature || "")
+          .split("\n")
+          .map((feature) => feature.trim())
+          .filter(Boolean),
+        collectionButtonText:
+          item.collection_button_text || item.collectionButtonText || "Explore collection",
+        catalogueButtonText:
+          item.catalogue_button_text || item.catalogueButtonText || "View catalogue",
+        collectionId: item.id || item.slug || `collection-${index}`,
+      }));
+    }
+
+    return defaultLatestItems;
+  }, [latestItemsData, defaultLatestItems]);
 
   // -----------------------------------------------------------------
   // 8. Why Premier (6-card sequence) - Dynamic Count
   // -----------------------------------------------------------------
-  const whySection = useMemo(
-    () => getSection(metadata, "why_premier", "why", "features"),
-    [metadata]
-  );
-  const whyHeading =
-    getFieldValue(whySection, "heading", "title") || "Why people choose Premier";
-  const whySubtitle =
-    getFieldValue(whySection, "subtitle", "description", "lede") ||
-    "Six things we hold ourselves to, in every collection we make.";
-
-  const whyCardsField = getField(whySection, "tabs", "cards", "why_items", "reasons");
-  const whyCardsData = getCardJsonData<Record<string, string>>(whyCardsField);
+  const whySection = useMemo(() => getSection(metadata, "why_premier"),[metadata]);
+const whyEyebrow =getFieldValue(whySection, "eyebrow") || "WHY PREMIER";
+const whyHeading =getFieldValue(whySection, "heading") || "Why people choose Premier";
+const whySubtitle =getFieldValue(whySection, "description") ||"Six things we hold ourselves to, in every collection we make.";
+const whyButtonText =getFieldValue(whySection, "button_text") || "Explore collections";
+const whyCardsField = getField(whySection, "items");
+const whyCardsData =getCardJsonData<Record<string, string>>(whyCardsField);
 
   const defaultWhyTabs = useMemo(
     () => [
@@ -415,74 +537,7 @@ export default function Home({ onNavigate }: HomeProps) {
   }, [whyCardsData, defaultWhyTabs]);
 
   // -----------------------------------------------------------------
-  // 9. Blog Section Data
-  // -----------------------------------------------------------------
-  const blogSection = useMemo(
-    () => getSection(metadata, "blog", "articles", "news"),
-    [metadata]
-  );
-  const blogHeading =
-    getFieldValue(blogSection, "heading", "title") || "Ideas, guides & inspiration";
-  const blogSubtitle =
-    getFieldValue(blogSection, "subtitle", "description") ||
-    "Tips on choosing, using and styling laminates, straight from the Premier team.";
-
-  const blogCardField = getField(blogSection, "blogs", "articles", "posts", "items");
-  const blogCardData = getCardJsonData<Record<string, string>>(blogCardField);
-
-  const dynamicBlogs = useMemo(() => {
-    if (blogCardData && blogCardData.length > 0) {
-      return blogCardData.map((item, idx) => ({
-        id: item.id || `blog-${idx}`,
-        img: item.img || item.image || "/img/hl-kitchen.jpg",
-        alt: item.alt || item.title || "Blog image",
-        tag: item.tag || item.category || "Guides",
-        date: item.date || "12 Nov 2026",
-        readTime: item.readTime || item.read_time || "4 min read",
-        title: item.title || "Laminate Guide",
-        desc: item.desc || item.description || "",
-        delay: `${idx * 90}ms`,
-      }));
-    }
-    return [
-      {
-        id: "kitchen-laminate",
-        img: "/img/hl-kitchen.jpg",
-        alt: "A kitchen with dark laminate and a wood-fluted tower",
-        tag: "Guides",
-        date: "12 Nov 2026",
-        readTime: "4 min read",
-        title: "How to choose the right laminate finish for your kitchen",
-        desc: "Matte, gloss or textured? A simple way to match finish, colour and daily wear to the way you cook.",
-        delay: "0ms",
-      },
-      {
-        id: "scratch-grade",
-        img: "/img/v6h-lobby.jpg",
-        alt: "A lounge with a marble-finish wall",
-        tag: "Materials",
-        date: "5 Nov 2026",
-        readTime: "3 min read",
-        title: "Why scratch grade matters in busy spaces",
-        desc: "What a 6H rating means, and where a harder surface pays off in lobbies, salons and showrooms.",
-        delay: "90ms",
-      },
-      {
-        id: "kids-room",
-        img: "/img/imz-playroom.jpg",
-        alt: "A bright kids’ play room with printed wall panels",
-        tag: "Inspiration",
-        date: "28 Oct 2026",
-        readTime: "5 min read",
-        title: "Designing a kids’ room that lasts",
-        desc: "Ideas for printed wall panels that stay bright, wipe clean and grow with your child.",
-        delay: "180ms",
-      },
-    ];
-  }, [blogCardData]);
-
-  // -----------------------------------------------------------------
-  // 10. Gallery Section Data
+  // 9. Gallery Section Data
   // -----------------------------------------------------------------
   const gallerySection = useMemo(
     () => getSection(metadata, "gallery", "gallery_section", "spaces"),
@@ -491,36 +546,88 @@ export default function Home({ onNavigate }: HomeProps) {
   const galleryHeading =
     getFieldValue(gallerySection, "heading", "title") || "Premier in spaces";
   const gallerySubtitle =
-    getFieldValue(gallerySection, "subtitle", "description") ||
+    getFieldValue(gallerySection, "description", "subtitle") ||
     "Homes, salons, cafés and kids’ rooms finished with Premier collections.";
 
-  const galRow1 = [
-    { src: "/img/hl-kitchen.jpg", w: 1153, h: 1153, alt: "A kitchen with dark laminate and a wood-fluted tower" },
-    { src: "/img/imz-playroom.jpg", w: 615, h: 615, alt: "A bright kids’ play room with printed wall panels" },
-    { src: "/img/v6h-lobby.jpg", w: 615, h: 439, alt: "A lounge with a marble-finish wall" },
-    { src: "/img/hl-cafe.jpg", w: 1153, h: 1153, alt: "A sage-green café with laminate wall panels" },
-    { src: "/img/imz-mermaid.jpg", w: 615, h: 615, alt: "A mermaid-themed bedroom with a printed wall panel" },
-    { src: "/img/v6h-salon-b.jpg", w: 615, h: 439, alt: "A salon with arched mirrors on a stone-finish wall" },
-  ];
-  const galRow2 = [
-    { src: "/img/v6h-salon-a.jpg", w: 615, h: 439, alt: "Stylists at work in front of mirrors on a stone-finish wall" },
-    { src: "/img/hl-nursery.jpg", w: 1151, h: 1152, alt: "A nursery with blue laminate wardrobe doors" },
-    { src: "/img/imz-rainbow.jpg", w: 916, h: 615, alt: "A rainbow wall design and the finished play room" },
-    { src: "/img/hl-office.jpg", w: 1153, h: 1153, alt: "A calm office with laminate desks" },
-    { src: "/img/v6h-lobby.jpg", w: 615, h: 439, alt: "A lounge with a marble-finish wall" },
-    { src: "/img/imz-playroom.jpg", w: 615, h: 615, alt: "A bright kids’ play room with printed wall panels" },
-  ];
-  const galRow3 = [
-    { src: "/img/hl-cafe.jpg", w: 1153, h: 1153, alt: "A sage-green café with laminate wall panels" },
-    { src: "/img/v6h-salon-b.jpg", w: 615, h: 439, alt: "A salon with arched mirrors on a stone-finish wall" },
-    { src: "/img/hl-kitchen.jpg", w: 1153, h: 1153, alt: "A kitchen with dark laminate and a wood-fluted tower" },
-    { src: "/img/imz-mermaid.jpg", w: 615, h: 615, alt: "A mermaid-themed bedroom with a printed wall panel" },
-    { src: "/img/hl-nursery.jpg", w: 1151, h: 1152, alt: "A nursery with blue laminate wardrobe doors" },
-    { src: "/img/v6h-salon-a.jpg", w: 615, h: 439, alt: "Stylists at work in front of mirrors on a stone-finish wall" },
+  const galleryImagesField = getField(
+    gallerySection,
+    "images",
+    "items",
+    "gallery_images",
+    "cards"
+  );
+  const galleryImagesData = getCardJsonData<Record<string, string>>(galleryImagesField);
+
+  const defaultGalleryImages = useMemo(
+    () => [
+      "/img/hl-kitchen.jpg",
+      "/img/imz-playroom.jpg",
+      "/img/v6h-lobby.jpg",
+      "/img/hl-cafe.jpg",
+      "/img/imz-mermaid.jpg",
+      "/img/v6h-salon-b.jpg",
+      "/img/v6h-salon-a.jpg",
+      "/img/hl-nursery.jpg",
+      "/img/imz-rainbow.jpg",
+      "/img/hl-office.jpg",
+      "/img/v6h-lobby.jpg",
+      "/img/imz-playroom.jpg",
+      "/img/hl-cafe.jpg",
+      "/img/v6h-salon-b.jpg",
+      "/img/hl-kitchen.jpg",
+      "/img/imz-mermaid.jpg",
+      "/img/hl-nursery.jpg",
+      "/img/v6h-salon-a.jpg",
+    ],
+    []
+  );
+
+  const galleryImages = useMemo(() => {
+    if (galleryImagesData && galleryImagesData.length > 0) {
+      return galleryImagesData
+        .map((item) => item.image || "")
+        .filter(Boolean);
+    }
+    return defaultGalleryImages;
+  }, [galleryImagesData, defaultGalleryImages]);
+
+  const galleryRows = useMemo(() => {
+    const rows: string[][] = [[], [], []];
+    galleryImages.forEach((image, index) => {
+      rows[index % 3].push(image);
+    });
+    return rows;
+  }, [galleryImages]);
+
+  const gallerySizePresets = [
+    [
+      { w: 1153, h: 1153 },
+      { w: 615, h: 615 },
+      { w: 615, h: 439 },
+      { w: 1153, h: 1153 },
+      { w: 615, h: 615 },
+      { w: 615, h: 439 },
+    ],
+    [
+      { w: 615, h: 439 },
+      { w: 1151, h: 1152 },
+      { w: 916, h: 615 },
+      { w: 1153, h: 1153 },
+      { w: 615, h: 439 },
+      { w: 615, h: 615 },
+    ],
+    [
+      { w: 1153, h: 1153 },
+      { w: 615, h: 439 },
+      { w: 1153, h: 1153 },
+      { w: 615, h: 615 },
+      { w: 1151, h: 1152 },
+      { w: 615, h: 439 },
+    ],
   ];
 
   // -----------------------------------------------------------------
-  // 11. CTA Section Data
+  // 10. CTA Section Data
   // -----------------------------------------------------------------
   const ctaSection = useMemo(
     () => getSection(metadata, "cta", "cta_section", "contact_teaser"),
@@ -532,14 +639,33 @@ export default function Home({ onNavigate }: HomeProps) {
     getFieldValue(ctaSection, "description", "subtitle", "lede") ||
     "Tell us what you are building and we will suggest the collection, share samples and answer your questions.";
   const ctaButton = parseButtonValue(
-    getFieldValue(ctaSection, "button", "cta_button"),
+    getFieldValue(ctaSection, "primary_button_text", "button", "cta_button"),
     "Send an enquiry",
     "contact"
   );
-  const contactPhone = getFieldValue(ctaSection, "phone", "contact_phone") || "+91 XXXXX XXXXX";
-  const contactEmail = getFieldValue(ctaSection, "email", "contact_email") || "Premierindia@gmail.com";
-  const contactAddress =
-    getFieldValue(ctaSection, "address", "location") || "Mumbai, Maharashtra, India";
+
+  const ctaSecondaryButtonText =
+    getFieldValue(ctaSection, "secondary_button_text", "catalogue_button") ||
+    "View catalogue";
+
+  const contactDetailsField = getField(
+    ctaSection,
+    "contact_details",
+    "contact",
+    "details"
+  );
+  const contactDetailsData =
+    getCardJsonData<Record<string, string>>(contactDetailsField);
+
+  const contactDetails = useMemo(() => {
+    const item = contactDetailsData?.[0];
+
+    return {
+      phone: item?.phone || "+91 XXXXX XXXXX",
+      email: item?.email || "Premierindia@gmail.com",
+      address: item?.address || "Mumbai, Maharashtra, India",
+    };
+  }, [contactDetailsData]);
 
   return (
     <>
@@ -637,50 +763,24 @@ export default function Home({ onNavigate }: HomeProps) {
           </div>
 
           <div className="abt2-cards">
-            <article className="acard">
-              <img
-                src="/img/craft.jpg"
-                alt="Craftsman holding a Premier board"
-                loading="lazy"
-              />
-              <div className="ic">
-                <ShieldCheck className="icon" aria-hidden="true" />
-              </div>
-              <h3>Strong</h3>
-              <p>
-                Built for the demands of everyday use, with strength in the material and in the brand.
-              </p>
-            </article>
+            {aboutCards.map((card, index) => {
+              const AboutIcon = [ShieldCheck, Palette, BadgeCheck][index] || ShieldCheck;
 
-            <article className="acard">
-              <img
-                src="/img/swatches.jpg"
-                alt="Premier laminate samples in marble, speckled and wood finishes"
-                loading="lazy"
-              />
-              <div className="ic">
-                <Palette className="icon" aria-hidden="true" />
-              </div>
-              <h3>Designer</h3>
-              <p>
-                Laminates and finishes that elevate every space.
-              </p>
-            </article>
-
-            <article className="acard">
-              <img
-                src="/img/team.jpg"
-                alt="Premier team member in uniform"
-                loading="lazy"
-              />
-              <div className="ic">
-                <BadgeCheck className="icon" aria-hidden="true" />
-              </div>
-              <h3>Reliable</h3>
-              <p>
-                Consistently high-quality products, and every commitment honoured.
-              </p>
-            </article>
+              return (
+                <article className="acard" key={`${card.title}-${index}`}>
+                  <img
+                    src={card.image}
+                    alt={card.alt}
+                    loading="lazy"
+                  />
+                  <div className="ic">
+                    <AboutIcon className="icon" aria-hidden="true" />
+                  </div>
+                  <h3>{card.title}</h3>
+                  <p>{card.description}</p>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -792,113 +892,89 @@ export default function Home({ onNavigate }: HomeProps) {
             <p className="lede">{latestSubtitle}</p>
           </div>
 
-          {/* Versace 6H */}
-          <article className="lc-row">
-            <button
-              className="lc-media"
-              type="button"
-              aria-label="Play the Versace 6H video"
-              onClick={() => openVideo(versaceVideo)}
-            >
-              <img
-                src="/img/v6h-lobby.jpg"
-                alt="A lounge with a marble-finish wall"
-                loading="lazy"
-              />
-              <span className="play">
-                <Play aria-hidden="true" fill="currentColor" />
-              </span>
-              <span className="lc-tag">
-                <span className="lc-new">New</span>Watch the film
-              </span>
-            </button>
+          {latestItems.map((item, idx) => (
+            <article className={`lc-row ${idx % 2 === 1 ? "flip" : ""}`} key={item.id}>
+              <button
+                className="lc-media"
+                type="button"
+                aria-label={
+                  item.video
+                    ? `Play the ${item.name} video`
+                    : `View the ${item.name} collection`
+                }
+                onClick={() => {
+                  if (item.video) {
+                    openVideo(item.video);
+                  }
+                }}
+                disabled={!item.video}
+              >
+                {item.image ? (
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="lc-media-placeholder" aria-hidden="true" />
+                )}
 
-            <div className="lc-copy">
-              <span className="eyebrow">New collection</span>
-              <h3>Versace 6H</h3>
-              <p className="sub">6H scratch grade</p>
-              <p className="lede">
-                100% pure virgin acrylic, 1.5 mm thick, with a 6H scratch grade.
-              </p>
-              <ul className="lc-pills">
-                <li>100% pure virgin acrylic</li>
-                <li>1.5 mm thick</li>
-                <li>6H scratch grade</li>
-              </ul>
-              <div className="btn-row">
-                <button
-                  className="btn btn-sapphire"
-                  type="button"
-                  onClick={() => onNavigate?.("collection", "versace-6h")}
-                >
-                  See Versace 6H <ArrowRight className="icon" aria-hidden="true" />
-                </button>
-                <a
-                  className="btn btn-ghost dk"
-                  style={{ color: "var(--sapphire)" }}
-                  href="/catalogue/premier-versace-6h-catalogue.pdf"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Eye className="icon eye" aria-hidden="true" /> View catalogue
-                </a>
+                {item.video && (
+                  <span className="play">
+                    <Play aria-hidden="true" fill="currentColor" />
+                  </span>
+                )}
+
+                {item.video && (
+                  <span className="lc-tag">
+                    <span className="lc-new">New</span>
+                    {item.videoLabel}
+                  </span>
+                )}
+              </button>
+
+              <div className="lc-copy">
+                <span className="eyebrow">{item.eyebrow}</span>
+                <h3>{item.name}</h3>
+                {item.subtitle && <p className="sub">{item.subtitle}</p>}
+                {item.description && <p className="lede">{item.description}</p>}
+
+                {item.features.length > 0 && (
+                  <ul className="lc-pills">
+                    {item.features.map((feature, featureIndex) => (
+                      <li key={`${item.id}-feature-${featureIndex}`}>{feature}</li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="btn-row">
+                  <button
+                    className="btn btn-sapphire"
+                    type="button"
+                    onClick={() =>
+                      onNavigate?.("collection", item.collectionId || item.id)
+                    }
+                  >
+                    {item.collectionButtonText}{" "}
+                    <ArrowRight className="icon" aria-hidden="true" />
+                  </button>
+
+                  {(cataloguePaths[item.id] || "/catalog") && (
+                    <a
+                      className="btn btn-ghost dk"
+                      style={{ color: "var(--sapphire)" }}
+                      href={cataloguePaths[item.id] || "/catalog"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Eye className="icon eye" aria-hidden="true" />
+                      {item.catalogueButtonText}
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
-          </article>
-
-          {/* Imazica */}
-          <article className="lc-row flip">
-            <button
-              className="lc-media"
-              type="button"
-              aria-label="Play the Imazica video"
-              onClick={() => openVideo(imazicaVideo)}
-            >
-              <img
-                src="/img/imz-playroom.jpg"
-                alt="A bright kids’ play room with printed wall panels"
-                loading="lazy"
-              />
-              <span className="play">
-                <Play aria-hidden="true" fill="currentColor" />
-              </span>
-              <span className="lc-tag">
-                <span className="lc-new">New</span>Watch the film
-              </span>
-            </button>
-
-            <div className="lc-copy">
-              <span className="eyebrow">New collection</span>
-              <h3>Imazica</h3>
-              <p className="sub">Beautiful walls. Long-lasting smiles.</p>
-              <p className="lede">
-                India’s first designer acrylic laminate made for kids’ spaces. A premium, long-lasting wall solution that goes beyond wallpaper.
-              </p>
-              <ul className="lc-pills">
-                <li>High-gloss acrylic finish</li>
-                <li>Hundreds of exciting themes</li>
-                <li>4 ft × 8 ft panels</li>
-              </ul>
-              <div className="btn-row">
-                <button
-                  className="btn btn-sapphire"
-                  type="button"
-                  onClick={() => onNavigate?.("collection", "imazica")}
-                >
-                  See Imazica <ArrowRight className="icon" aria-hidden="true" />
-                </button>
-                <a
-                  className="btn btn-ghost dk"
-                  style={{ color: "var(--sapphire)" }}
-                  href="/catalogue/premier-imazica-catalogue.pdf"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Eye className="icon eye" aria-hidden="true" /> View catalogue
-                </a>
-              </div>
-            </div>
-          </article>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -912,18 +988,20 @@ export default function Home({ onNavigate }: HomeProps) {
             <div className="wrap">
               <div className="why-head">
                 <div>
-                  <span className="eyebrow">Why Premier</span>
-                  <h2>
-                    Why people choose <em>Premier</em>
-                  </h2>
-                </div>
-                <div className="why-r">
-                  <p className="lede">{whySubtitle}</p>
-                  <a className="btn btn-sapphire" href="#collections">
-                    Explore collections <ArrowRight className="icon" aria-hidden="true" />
-                  </a>
-                </div>
-              </div>
+                    <span className="eyebrow">{whyEyebrow}</span>
+                              <h2>
+                                {whyHeading}
+                              </h2>
+                            </div>
+                            <div className="why-r">
+                              <p className="lede">{whySubtitle}</p>
+
+                              <a className="btn btn-sapphire" href="#collections">
+                                {whyButtonText}
+                                <ArrowRight className="icon" aria-hidden="true" />
+                              </a>
+                            </div>
+                                 </div>
 
               <div className="acc">
                 {dynamicWhyTabs.map((tab, idx) => (
@@ -953,123 +1031,42 @@ export default function Home({ onNavigate }: HomeProps) {
         </div>
       </section>
 
-      {/* 7. BLOG SECTION (REPEATABLE & DYNAMIC) */}
-      <section className="blg sec" id="blog">
-        <div className="wrap">
-          <div className="shead">
-            <div>
-              <span className="eyebrow">Blog</span>
-              <h2 className="t-l">
-                Ideas, guides &amp; <em>inspiration</em>
-              </h2>
-            </div>
-            <p className="lede">{blogSubtitle}</p>
-          </div>
-
-          <div className="blg-grid">
-            {dynamicBlogs.map((item) => (
-              <article
-                key={item.id}
-                className="blg-card"
-                style={{ "--d": item.delay } as React.CSSProperties}
-              >
-                <a
-                  className="blg-img"
-                  href="#blog"
-                  aria-label={item.title}
-                >
-                  <img src={item.img} alt={item.alt} loading="lazy" />
-                  <span className="blg-tag">{item.tag}</span>
-                </a>
-                <div className="blg-body">
-                  <p className="blg-meta">
-                    <time>{item.date}</time>
-                    <span aria-hidden="true">·</span>
-                    <span>{item.readTime}</span>
-                  </p>
-                  <h3>
-                    <a href="#blog">{item.title}</a>
-                  </h3>
-                  <p>{item.desc}</p>
-                  <a className="blg-more" href="#blog">
-                    Read article <ArrowRight className="icon" aria-hidden="true" />
-                  </a>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          <div className="btn-row blg-cta">
-            <a className="btn btn-sapphire" href="#blog">
-              View all articles <ArrowRight className="icon" aria-hidden="true" />
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* 8. GALLERY SECTION (REPEATABLE & DYNAMIC) */}
+      {/* 7. GALLERY SECTION (REPEATABLE & DYNAMIC) */}
       <section className="gal3 sec" id="gallery">
         <div className="wrap">
           <div className="shead">
-            <h2 className="t-l">
-              Premier in <em>spaces</em>
-            </h2>
+            <h2 className="t-l">{galleryHeading}</h2>
             <p className="lede">{gallerySubtitle}</p>
           </div>
         </div>
 
         <div className="g3-rows">
-          <div className="g3-row">
-            <div className="g3-track">
-              {[...galRow1, ...galRow1].map((img, idx) => (
-                <figure key={idx}>
-                  <img
-                    src={img.src}
-                    width={img.w}
-                    height={img.h}
-                    alt={img.alt}
-                    loading="lazy"
-                  />
-                </figure>
-              ))}
-            </div>
-          </div>
+          {galleryRows.map((row, rowIndex) => (
+            <div className="g3-row" key={`gallery-row-${rowIndex}`}>
+              <div className="g3-track">
+                {[...row, ...row].map((image, imageIndex) => {
+                  const size =
+                    gallerySizePresets[rowIndex][imageIndex % gallerySizePresets[rowIndex].length];
 
-          <div className="g3-row">
-            <div className="g3-track">
-              {[...galRow2, ...galRow2].map((img, idx) => (
-                <figure key={idx}>
-                  <img
-                    src={img.src}
-                    width={img.w}
-                    height={img.h}
-                    alt={img.alt}
-                    loading="lazy"
-                  />
-                </figure>
-              ))}
+                  return (
+                    <figure key={`${rowIndex}-${imageIndex}`}>
+                      <img
+                        src={image}
+                        width={size.w}
+                        height={size.h}
+                        alt="Premier interior space"
+                        loading="lazy"
+                      />
+                    </figure>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-
-          <div className="g3-row">
-            <div className="g3-track">
-              {[...galRow3, ...galRow3].map((img, idx) => (
-                <figure key={idx}>
-                  <img
-                    src={img.src}
-                    width={img.w}
-                    height={img.h}
-                    alt={img.alt}
-                    loading="lazy"
-                  />
-                </figure>
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* 9. CTA SECTION */}
+      {/* 8. CTA SECTION */}
       <section className="cta sec-tight">
         <div className="wrap">
           <div className="cta-box">
@@ -1089,7 +1086,7 @@ export default function Home({ onNavigate }: HomeProps) {
                   type="button"
                   onClick={() => onNavigate?.("catalog")}
                 >
-                  View catalogue
+                  {ctaSecondaryButtonText}
                 </button>
               </div>
             </div>
@@ -1097,15 +1094,15 @@ export default function Home({ onNavigate }: HomeProps) {
             <div className="cta-lines">
               <div>
                 <Phone className="icon" aria-hidden="true" />
-                <span>{contactPhone}</span>
+                <span>{contactDetails.phone}</span>
               </div>
               <div>
                 <Mail className="icon" aria-hidden="true" />
-                <span>{contactEmail}</span>
+                <span>{contactDetails.email}</span>
               </div>
               <div>
                 <MapPin className="icon" aria-hidden="true" />
-                <span>{contactAddress}</span>
+                <span>{contactDetails.address}</span>
               </div>
             </div>
           </div>
